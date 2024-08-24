@@ -58,6 +58,9 @@ class PersonElasticDb:
                         # 'type': 'date',
                         # 'format': 'yyyy-MM-dd'
                     },
+                    # 'src_article': {
+                    #     'type': 'text'
+                    # }
                 }
             }
         }

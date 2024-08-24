@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 from wikitest.api.datasets import PersonDataset
 from wikitest.api.model import Person
+from wikitest.api.filters import PersonFilter
 from wikitest.datasets.wiki.parser import PersonPageParser
 
 
@@ -25,6 +26,7 @@ class MediaWikiDataset(PersonDataset):
         self.path = path
         self.take_n = take_n
         self._parser = PersonPageParser()
+        self._filters: list[PersonFilter] = []
     
     def __iter__(self) -> Iterator[Person]:
         counter = 0
@@ -46,12 +48,17 @@ class MediaWikiDataset(PersonDataset):
             # clean element
             page_elem.clear()
             person = self._parser.try_parse(page_title, page_text)
-            if person is not None:
-                # print(person)
-                yield person
-                counter += 1
+            if person is None:
+                continue
+            if not self._apply_person_filters(person):
+                continue
+            yield person
+            counter += 1
             if counter == self.take_n:
                 break
+
+    def add_filter(self, filt: PersonFilter):
+        self._filters.append(filt)
 
     def _ext_ns(self, tag: str, ns: Optional[str]) -> str:
         if ns:
@@ -67,3 +74,7 @@ class MediaWikiDataset(PersonDataset):
     def _get_child(self, elem: Any, tag: str) -> Any:
         ns = elem.nsmap.get(None)
         return elem.find(self._ext_ns(tag, ns))
+
+    def _apply_person_filters(self, person: Person) -> bool:
+        filters = (filt.apply(person) for filt in self._filters)
+        return all(filters)
