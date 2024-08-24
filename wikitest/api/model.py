@@ -9,6 +9,7 @@ class Person:
     patronymic: Optional[str]
     birth_date: Optional[str]
     death_date: Optional[str]
+    src_article: str
 
 
 @dataclass

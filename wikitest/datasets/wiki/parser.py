@@ -11,6 +11,7 @@ class PersonPageParser:
         self.log = False
         self._name_parser = PersonNameParser()
         self._date_parser = PersonDateParser()
+        self._article_fmt = PersonArticleFormatter()
 
     def try_parse(self, title: str, text: str) -> Optional[Person]:
         try:
@@ -62,7 +63,11 @@ class PersonPageParser:
     def _parse_person(self, title: str, wikitext: wtp.WikiText) -> Person:
         name, surname, patronymic = self._name_parser.parse_names(title, wikitext)
         birth_date, death_date = self._date_parser.parse_dates(title, wikitext)
-        return Person(name=name, surname=surname, patronymic=patronymic, birth_date=birth_date, death_date=death_date)
+        src_article = self._article_fmt.format_article(title, wikitext)
+        return Person(
+            name=name, surname=surname, patronymic=patronymic,
+            birth_date=birth_date, death_date=death_date, src_article=src_article,
+        )
 
 
 class PersonNameParser():
@@ -148,3 +153,8 @@ class PersonDateParser():
         if new_2 is not None:
             res_2 = new_2
         return (res_1, res_2)
+
+
+class PersonArticleFormatter():
+    def format_article(self, title: str, wikitext: wtp.WikiText) -> str:
+        return wikitext.plain_text()

@@ -58,9 +58,9 @@ class PersonElasticDb:
                         # 'type': 'date',
                         # 'format': 'yyyy-MM-dd'
                     },
-                    # 'src_article': {
-                    #     'type': 'text'
-                    # }
+                    'src_article': {
+                        'type': 'text'
+                    }
                 }
             }
         }
@@ -74,6 +74,7 @@ class PersonElasticDb:
             'patronymic': person.patronymic,
             'birth_date': person.birth_date,
             'death_date': person.death_date,
+            'src_article': person.src_article,
         }
         return person_dict
 
@@ -85,6 +86,7 @@ class PersonElasticDb:
             patronymic=person_dict['patronymic'],
             birth_date=person_dict['birth_date'],
             death_date=person_dict['death_date'],
+            src_article=person_dict['src_article'],
         )
 
     @staticmethod
