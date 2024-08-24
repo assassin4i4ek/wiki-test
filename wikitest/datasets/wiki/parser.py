@@ -90,25 +90,35 @@ class PersonDateParser():
         self._birth_tmpl_arg_name_rx = re.compile(r'дата[\s|_]народження')
         self._death_tmpl_arg_name_rx = re.compile(r'дата[\s|_]смерті')
         self._tmpl_arg_val_rx = re.compile(r'\d{1,2}\.\d{1,2}\.\d{3,4}')
+        self._clean_ptext_rx = re.compile(r'[^a-zA-Zа-яА-ЯіІїЇёЁ0-9\s()—]')
+        self._group_ptext_rx = re.compile(r'\(.*?\)')
+        self._birth_ptext_rx = re.compile(r'.*?(?P<birth_date>\d{1,2}\s\w+\s\d{3,4}).*')
+        self._death_ptext_rx = re.compile(r'.*—.*?(?P<death_date>\d{1,2}\s\w+\s\d{3,4}).*?')
 
     def parse_dates(self, title: str, wikitext: wtp.WikiText) -> tuple[Optional[str], Optional[str]]:
-        # try parse from infobox template args
-        for t in wikitext.templates:
-            dates = None
-            for a in t.arguments:
-                res = self._try_parse_from_tmpl_arg(a)
-                dates = self._ext_dates_tuple(dates, res)
-            if dates is not None:
-                return dates
-        
+        tmpl_dates = None
         # try to parse directly from the template
-        dates = None
         for t in wikitext.templates:
             res = self._try_parse_from_tmpl(t)
-            dates = self._ext_dates_tuple(dates, res)
-        if dates is not None:
-            return dates
-        return (None, None)
+            tmpl_dates = self._ext_dates_tuple(tmpl_dates, res)
+
+        # try parse from infobox template args
+        infobox_dates = None
+        for t in wikitext.templates:
+            for a in t.arguments:
+                res = self._try_parse_from_tmpl_arg(a)
+                infobox_dates = self._ext_dates_tuple(infobox_dates, res)
+            if infobox_dates is not None:
+                break
+
+        # try to parse from regex
+        ptext_dates = self._try_parse_from_plaintext(wikitext.plain_text())
+
+        dates = (None, None)
+        dates = self._ext_dates_tuple(dates, tmpl_dates)
+        dates = self._ext_dates_tuple(dates, infobox_dates)
+        dates = self._ext_dates_tuple(dates, ptext_dates)
+        return dates
 
     def _try_parse_from_tmpl_arg(self, arg: wtp.Argument) -> Optional[tuple[Optional[str], Optional[str]]]:
         res = None
@@ -124,22 +134,51 @@ class PersonDateParser():
         return res
 
     def _try_parse_from_tmpl(self, tmpl: wtp.Template) -> Optional[tuple[Optional[str], Optional[str]]]:
-        if tmpl.normal_name().strip().lower() == 'дн':
+        if tmpl.normal_name().strip().lower().startswith('дн'):
             if len(tmpl.arguments) < 3:
                 raise ValueError("Invalid template")
             birth_date = '.'.join([a.value for a in tmpl.arguments[:3]])
             return (birth_date, None)
-        if tmpl.normal_name().strip().lower() == 'дс':
+        if tmpl.normal_name().strip().lower().startswith('дс'):
             if len(tmpl.arguments) < 3:
                 raise ValueError("Invalid template")
             death_date = '.'.join([a.value for a in tmpl.arguments[:3]])
             
             return (None, death_date)
 
+    def _try_parse_from_plaintext(self, text: str) -> Optional[tuple[Optional[str], Optional[str]]]:
+        for group in self._extract_text_groups(text):
+            group = group.replace('\xa0', ' ')
+            group = self._clean_ptext_rx.sub('', group)
+            birth_match = self._birth_ptext_rx.match(group)
+            death_match = self._death_ptext_rx.match(group)
+            if birth_match is not None or death_match is not None:
+                birth_date = birth_match.group('birth_date') if birth_match is not None else None
+                death_date = death_match.group('death_date') if death_match is not None else None
+                return (birth_date, death_date)
+        return None
+
+    def _extract_text_groups(self, text: str) -> list[str]:
+        stack = []
+        result = []
+
+        for ch in re.finditer(r'[\(\)]', text):
+            if ch.group() == '(':
+                stack.append(ch.start())
+            else:
+                if len(stack) == 0:
+                    continue
+                start = stack.pop()
+                end = ch.end()
+                result.append(text[start:end])
+
+        return result
+
     def _ext_dates_tuple(
             self,
             prev: Optional[tuple[Optional[str], Optional[str]]],
-            new: Optional[tuple[Optional[str], Optional[str]]]
+            new: Optional[tuple[Optional[str], Optional[str]]],
+            priority_new: bool = False
     ) -> Optional[tuple[Optional[str], Optional[str]]]:
         if prev is None:
             return new
@@ -148,13 +187,13 @@ class PersonDateParser():
         
         res_1, res_2 = prev
         new_1, new_2 = new
-        if new_1 is not None:
+        if new_1 is not None and (res_1 is None or priority_new):
             res_1 = new_1
-        if new_2 is not None:
+        if new_2 is not None and (res_2 is None or priority_new):
             res_2 = new_2
         return (res_1, res_2)
 
 
 class PersonArticleFormatter():
     def format_article(self, title: str, wikitext: wtp.WikiText) -> str:
-        return wikitext.plain_text()
+        return str(wikitext)

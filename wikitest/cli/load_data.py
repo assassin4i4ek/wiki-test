@@ -13,6 +13,7 @@ if __name__ == '__main__':
     ]
     for data_path in sys.argv[1:]: 
         # data = TestDataset()
+        print(f'Processing data {data_path}')
         data = MediaWikiDataset(data_path)
         for filt in filters:
             data.add_filter(filt)
